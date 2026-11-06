@@ -1,7 +1,7 @@
 # E-commerce de Productos Naturales 🌿🥜
 
 ## Proyecto Integrador — Módulo 5
-### Homework Clase 1: E-commerce Kickoff
+
 
 Aplicación desarrollada con **React, TypeScript y Vite**, cuyo objetivo es establecer las bases arquitectónicas de una tienda online de productos naturales y frutos secos.
 
@@ -410,9 +410,6 @@ Entre las posibles ampliaciones se encuentran la búsqueda y filtrado de product
 
 ---
 
-**Estado de la Homework 1:** arquitectura implementada, Contexts y hooks integrados, demostración anti-prop drilling y dos tests aprobados.
-
-## Homework 2 — Sistema de Blog
 
 ### Modelado de datos
 
