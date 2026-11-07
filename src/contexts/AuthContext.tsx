@@ -1,4 +1,3 @@
-
 import {
   createContext,
   useEffect,
@@ -9,7 +8,7 @@ import {
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  onAuthStateChanged,
+  onIdTokenChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -43,35 +42,71 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
+    let active = true;
+    let revision = 0;
+
+    const unsubscribe = onIdTokenChanged(
       auth,
-      (firebaseUser) => {
-        if (firebaseUser) {
-          const currentUser: User = {
+      async (firebaseUser) => {
+        const currentRevision = ++revision;
+
+        setLoading(true);
+        setUser(null);
+
+        if (!firebaseUser) {
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const tokenResult =
+            await firebaseUser.getIdTokenResult();
+
+          if (!active || currentRevision !== revision) {
+            return;
+          }
+
+          setUser({
             id: firebaseUser.uid,
             name:
               firebaseUser.displayName ||
               firebaseUser.email?.split("@")[0] ||
               "Usuario",
             email: firebaseUser.email || "",
-            role: "customer",
-          };
-
-          setUser(currentUser);
-        } else {
-          setUser(null);
+            role:
+              tokenResult.claims.role === "admin"
+                ? "admin"
+                : "customer",
+          });
+        } catch {
+          if (active && currentRevision === revision) {
+            setUser(null);
+            console.error(
+              "No se pudieron verificar los permisos de la sesión."
+            );
+          }
+        } finally {
+          if (active && currentRevision === revision) {
+            setLoading(false);
+          }
         }
-
-        setLoading(false);
       },
-      (error) => {
-        console.error("Error al verificar la sesión:", error);
-        setUser(null);
-        setLoading(false);
+      () => {
+        revision++;
+
+        if (active) {
+          setUser(null);
+          setLoading(false);
+          console.error("No se pudo verificar la sesión.");
+        }
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      revision++;
+      unsubscribe();
+    };
   }, []);
 
   const login = async (
@@ -96,13 +131,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     await signOut(auth);
   };
 
-  const isAuthenticated = user !== null;
-
   return (
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated,
+        isAuthenticated: user !== null,
         loading,
         login,
         register,

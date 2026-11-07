@@ -1,4 +1,3 @@
-
 import {
   createContext,
   useEffect,
@@ -7,7 +6,7 @@ import {
 } from "react";
 
 import type { Product } from "../types/product";
-import { getProducts } from "../services/productsService";
+import { subscribeToProducts } from "../services/productsService";
 
 interface ProductsContextType {
   products: Product[];
@@ -31,36 +30,18 @@ export function ProductsProvider({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadProducts() {
-      try {
-        setLoading(true);
+    return subscribeToProducts(
+      (updatedProducts) => {
+        setProducts(updatedProducts);
         setError(null);
-
-        const productsFromFirestore = await getProducts();
-
-        if (active) {
-          setProducts(productsFromFirestore);
-        }
-      } catch (err) {
-        console.error("Error al cargar productos:", err);
-
-        if (active) {
-          setError("No se pudieron cargar los productos.");
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+        setLoading(false);
+      },
+      () => {
+        setProducts([]);
+        setError("No se pudieron cargar los productos.");
+        setLoading(false);
       }
-    }
-
-    void loadProducts();
-
-    return () => {
-      active = false;
-    };
+    );
   }, []);
 
   return (

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360">
+  <rect width="480" height="360" rx="24" fill="#f3ead8"/>
+  <circle cx="240" cy="155" r="82" fill="#e2e7cd"/>
+  <path d="M161 191l59-75 45 54 29-35 44 56H161z"
+        fill="none" stroke="#294c35" stroke-width="9"
+        stroke-linejoin="round"/>
+  <circle cx="264" cy="99" r="21" fill="#d69b42"/>
+  <path d="M153 216c29-4 46 4 58 22-28 5-48-2-58-22zm174 0c-29-4-46 4-58 22 28 5 48-2 58-22z"
+        fill="#6a7b43"/>
+  <text x="240" y="286" text-anchor="middle"
+        fill="#294c35" font-family="Georgia,serif"
+        font-size="34" font-weight="bold">Cumbre</text>
+  <text x="240" y="316" text-anchor="middle"
+        fill="#596452" font-family="Arial,sans-serif"
+        font-size="16">Imagen ilustrativa</text>
+</svg>

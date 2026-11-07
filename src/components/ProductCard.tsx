@@ -1,4 +1,4 @@
-
+import { Link } from "react-router-dom";
 import type { Product } from "../types/product";
 import { useCart } from "../hooks/useCart";
 
@@ -9,63 +9,70 @@ interface ProductCardProps {
 export function ProductCard({ product }: ProductCardProps) {
   const { items, addToCart } = useCart();
 
-  // Buscamos cuántas unidades de este producto
-  // ya están agregadas al carrito.
-  const cartItem = items.find(
-    (item) => item.productId === product.id
-  );
+  const quantityInCart =
+    items.find((item) => item.productId === product.id)
+      ?.quantity ?? 0;
 
-  const quantityInCart = cartItem?.quantity ?? 0;
-
-  // Calculamos el stock disponible para agregar.
   const availableStock = Math.max(
     0,
     product.stock - quantityInCart
   );
 
-  const handleAddToCart = () => {
-    if (availableStock > 0) {
-      addToCart(product.id);
-    }
-  };
-
   return (
-    <article
-      style={{
-        border: "1px solid #ddd",
-        borderRadius: "12px",
-        padding: "20px",
-        backgroundColor: "#fff",
-        color: "#333",
-      }}
-    >
-      <h3>{product.name}</h3>
-
-      <p>Categoría: {product.category}</p>
-
-      <p>
-        Precio: ${product.price.toLocaleString("es-AR")}
-      </p>
-
-      <p>
-        Stock disponible: {availableStock}
-      </p>
-
-      {quantityInCart > 0 && (
-        <p style={{ color: "#26734d", fontWeight: 600 }}>
-          🛒 En tu carrito: {quantityInCart}
-        </p>
-      )}
-
-      <button
-        type="button"
-        onClick={handleAddToCart}
-        disabled={availableStock === 0}
+    <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-surface text-ink">
+      <Link
+        to={`/products/${encodeURIComponent(product.id)}`}
+        aria-label={`Ver ${product.name}`}
+        className="block bg-surface-soft"
       >
-        {availableStock === 0
-          ? "Sin stock disponible"
-          : "Agregar al carrito"}
-      </button>
+        <img
+          src={product.imageUrl || "/product-placeholder.svg"}
+          alt={product.name}
+          loading="lazy"
+          className="aspect-4/3 w-full object-contain"
+        />
+      </Link>
+
+      <div className="flex flex-1 flex-col p-3">
+        <p className="mb-1 text-xs text-muted">
+          {product.category}
+        </p>
+
+        <h2 className="mb-2 text-sm font-semibold leading-snug">
+          <Link
+            to={`/products/${encodeURIComponent(product.id)}`}
+            className="text-ink no-underline hover:underline"
+          >
+            {product.name}
+          </Link>
+        </h2>
+
+        <p className="mb-1 text-base font-bold">
+          ${product.price.toLocaleString("es-AR")}
+        </p>
+
+        <p className="mb-3 text-xs text-muted">
+          {quantityInCart > 0
+            ? `${quantityInCart} en tu carrito`
+            : availableStock > 0
+              ? "Disponible"
+              : "Sin stock"}
+        </p>
+
+        <button
+          type="button"
+          disabled={availableStock === 0}
+          onClick={() => {
+            if (availableStock > 0) {
+              addToCart(product.id);
+            }
+          }}
+          aria-label={`Agregar ${product.name} al carrito`}
+          className="cumbre-button mt-auto w-full"
+        >
+          {availableStock === 0 ? "Sin stock" : "Agregar"}
+        </button>
+      </div>
     </article>
   );
 }

@@ -1,22 +1,40 @@
+/** @vitest-environment jsdom */
 
-/**
- * @vitest-environment jsdom
- */
-
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
-
-import { AuthProvider } from "../contexts/AuthContext";
-import { CartProvider } from "../contexts/CartContext";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+} from "@testing-library/react";
 
 import { useAuth } from "../hooks/useAuth";
 import { useCart } from "../hooks/useCart";
+import { TestProviders } from "./helpers/TestProviders";
 
-import { productsMock } from "../mocks/productsMock";
+type FakeUser = {
+  uid: string;
+  displayName: string;
+  email: string;
+  getIdTokenResult: () => Promise<{
+    claims: { role: string };
+  }>;
+};
+
+type AuthListener = (
+  user: FakeUser | null
+) => void | Promise<void>;
 
 const firebaseMocks = vi.hoisted(() => ({
-  onAuthStateChanged: vi.fn(),
+  listener: null as AuthListener | null,
+  onIdTokenChanged: vi.fn(),
   signInWithEmailAndPassword: vi.fn(),
   signOut: vi.fn(),
 }));
@@ -27,7 +45,7 @@ vi.mock("../config/firebase", () => ({
 
 vi.mock("firebase/auth", () => ({
   GoogleAuthProvider: vi.fn(),
-  onAuthStateChanged: firebaseMocks.onAuthStateChanged,
+  onIdTokenChanged: firebaseMocks.onIdTokenChanged,
   signInWithEmailAndPassword:
     firebaseMocks.signInWithEmailAndPassword,
   signOut: firebaseMocks.signOut,
@@ -35,91 +53,147 @@ vi.mock("firebase/auth", () => ({
   signInWithPopup: vi.fn(),
 }));
 
-const firebaseUser = {
-  uid: "u1",
+const fakeUser: FakeUser = {
+  uid: "cliente-1",
   displayName: "Cliente de prueba",
-  email: "cliente@ejemplo.com",
+  email: "cliente@example.com",
+  getIdTokenResult: async () => ({
+    claims: { role: "customer" },
+  }),
 };
 
-function TestProviders({ children }: { children: ReactNode }) {
-  return (
-    <AuthProvider>
-      <CartProvider>{children}</CartProvider>
-    </AuthProvider>
+beforeEach(() => {
+  vi.clearAllMocks();
+  firebaseMocks.listener = null;
+
+  firebaseMocks.onIdTokenChanged.mockImplementation(
+    (_auth: unknown, callback: AuthListener) => {
+      firebaseMocks.listener = callback;
+      void callback(null);
+
+      return () => {
+        firebaseMocks.listener = null;
+      };
+    }
   );
+
+  firebaseMocks.signInWithEmailAndPassword.mockImplementation(
+    async () => {
+      await firebaseMocks.listener?.(fakeUser);
+      return { user: fakeUser };
+    }
+  );
+
+  firebaseMocks.signOut.mockImplementation(async () => {
+    await firebaseMocks.listener?.(null);
+  });
+});
+
+afterEach(cleanup);
+
+function useSessionAndCart() {
+  return {
+    auth: useAuth(),
+    cart: useCart(),
+  };
 }
 
-describe("Integración entre AuthContext y CartContext", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    firebaseMocks.onAuthStateChanged.mockImplementation(
-      (_auth, callback) => {
-        callback(null);
-        return vi.fn();
-      }
-    );
-
-    firebaseMocks.signInWithEmailAndPassword.mockImplementation(
-      async () => {
-        const callback =
-          firebaseMocks.onAuthStateChanged.mock.calls[0]?.[1];
-
-        callback?.(firebaseUser);
-
-        return { user: firebaseUser };
-      }
-    );
-
-    firebaseMocks.signOut.mockImplementation(async () => {
-      const callback =
-        firebaseMocks.onAuthStateChanged.mock.calls[0]?.[1];
-
-      callback?.(null);
+describe("integración entre sesión y carrito", () => {
+  it("vacía el carrito al cerrar sesión", async () => {
+    const { result } = renderHook(useSessionAndCart, {
+      wrapper: TestProviders,
     });
-  });
-
-  it("vacía el carrito cuando el usuario cierra sesión", async () => {
-    const { result } = renderHook(
-      () => ({
-        auth: useAuth(),
-        cart: useCart(),
-      }),
-      { wrapper: TestProviders }
-    );
 
     await act(async () => {
       await result.current.auth.login(
-        "cliente@ejemplo.com",
+        "cliente@example.com",
         "password-de-prueba"
       );
     });
 
     await waitFor(() => {
-      expect(result.current.auth.isAuthenticated).toBe(true);
+      expect(result.current.auth.user?.id).toBe(
+        "cliente-1"
+      );
     });
 
     act(() => {
-      result.current.cart.addToCart(productsMock[0].id);
+      result.current.cart.addToCart("almendras");
     });
 
-    expect(result.current.cart.items).toEqual([
-      {
-        productId: productsMock[0].id,
-        quantity: 1,
-      },
-    ]);
+    expect(result.current.cart.items).toHaveLength(1);
 
     await act(async () => {
       await result.current.auth.logout();
     });
 
     await waitFor(() => {
+      expect(
+        result.current.auth.isAuthenticated
+      ).toBe(false);
+
       expect(result.current.cart.items).toEqual([]);
     });
 
-    expect(result.current.auth.isAuthenticated).toBe(false);
-
     expect(firebaseMocks.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("conserva el carrito de invitado al iniciar sesión", async () => {
+    const { result } = renderHook(useSessionAndCart, {
+      wrapper: TestProviders,
+    });
+
+    act(() => {
+      result.current.cart.addToCart("almendras");
+    });
+
+    await act(async () => {
+      await result.current.auth.login(
+        "cliente@example.com",
+        "password-de-prueba"
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.auth.isAuthenticated
+      ).toBe(true);
+    });
+
+    expect(result.current.cart.items).toEqual([
+      { productId: "almendras", quantity: 1 },
+    ]);
+  });
+
+  it("no entrega el carrito de una cuenta a otra", async () => {
+    const { result } = renderHook(useSessionAndCart, {
+      wrapper: TestProviders,
+    });
+
+    await act(async () => {
+      await result.current.auth.login(
+        "cliente@example.com",
+        "password-de-prueba"
+      );
+    });
+
+    act(() => {
+      result.current.cart.addToCart("almendras");
+    });
+
+    await act(async () => {
+      await firebaseMocks.listener?.({
+        ...fakeUser,
+        uid: "cliente-2",
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.auth.user?.id).toBe(
+        "cliente-2"
+      );
+
+      expect(result.current.cart.items).toEqual([]);
+    });
   });
 });

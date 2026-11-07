@@ -2,19 +2,16 @@ import { ProductGrid } from "../components/ProductGrid";
 
 export function ProductsPage() {
   return (
-    <main
-      style={{
-        maxWidth: "1100px",
-        margin: "0 auto",
-        padding: "32px 20px",
-      }}
-    >
-      <h1>Nuestra tienda de frutos secos 🥜</h1>
+    <main className="cumbre-container py-5 md:py-7">
+      <header className="mb-5">
+        <h1 className="mb-2 font-display text-2xl font-bold md:text-3xl">
+          Tienda Cumbre 🌿
+        </h1>
 
-      <p>
-        Descubrí nuestros productos y agregá tus favoritos
-        al carrito.
-      </p>
+        <p className="mb-0 text-sm text-muted">
+          Descubrí nuestros productos y elegí tus favoritos.
+        </p>
+      </header>
 
       <ProductGrid />
     </main>

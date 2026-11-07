@@ -1,4 +1,3 @@
-
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createHash } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
@@ -18,13 +17,25 @@ type ValidatedProduct = {
 };
 
 class CheckoutError extends Error {
-  constructor(
-    message: string,
-    public statusCode = 400
-  ) {
+  public statusCode: number;
+
+  constructor(message: string, statusCode = 400) {
     super(message);
     this.name = "CheckoutError";
+    this.statusCode = statusCode;
   }
+}
+
+function getErrorCode(error: unknown): string {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error
+  ) {
+    return String(error.code);
+  }
+
+  return "sin-codigo";
 }
 
 export default async function handler(
@@ -40,7 +51,7 @@ export default async function handler(
   }
 
   try {
-    // 1. Validar la sesión del usuario.
+    // 1. Comprobar que se recibió una sesión.
     const authorization = req.headers.authorization;
 
     if (
@@ -60,20 +71,43 @@ export default async function handler(
       });
     }
 
+    // 2. Inicializar Firebase Admin.
+    // Un problema de configuración del servidor no es
+    // lo mismo que una sesión inválida del cliente.
+    let adminAuth: ReturnType<typeof getAdminAuth>;
+
+    try {
+      adminAuth = getAdminAuth();
+    } catch (error) {
+      console.error(
+        "No se pudo inicializar Firebase Admin. Código:",
+        getErrorCode(error)
+      );
+
+      return res.status(500).json({
+        error:
+          "No se pudo preparar el servicio de compras. Intentá nuevamente más tarde.",
+      });
+    }
+
+    // 3. Verificar la sesión.
     let userId: string;
 
     try {
-      const decodedToken =
-        await getAdminAuth().verifyIdToken(token);
-
+      const decodedToken = await adminAuth.verifyIdToken(token);
       userId = decodedToken.uid;
-    } catch {
+    } catch (error) {
+      console.error(
+        "No se pudo verificar la sesión. Código:",
+        getErrorCode(error)
+      );
+
       return res.status(401).json({
         error: "Tu sesión no es válida.",
       });
     }
 
-    // 2. Validar el identificador de la compra.
+    // 4. Validar el identificador de compra.
     const requestId = req.body?.requestId;
 
     if (
@@ -85,7 +119,7 @@ export default async function handler(
       });
     }
 
-    // 3. Validar el carrito recibido.
+    // 5. Validar los productos y las cantidades.
     const items: unknown = req.body?.items;
 
     if (
@@ -108,6 +142,7 @@ export default async function handler(
         typeof item.productId !== "string" ||
         item.productId.trim() === "" ||
         item.productId.length > 200 ||
+        item.productId.includes("/") ||
         !Number.isSafeInteger(item.quantity) ||
         item.quantity <= 0 ||
         item.quantity > 1000
@@ -131,8 +166,8 @@ export default async function handler(
       });
     }
 
-    // 4. Crear una huella del contenido de la compra.
-    // El orden de los productos no debe afectar el resultado.
+    // 6. Identificar el contenido para evitar compras
+    // duplicadas cuando se reintenta la misma solicitud.
     const normalizedItems = [...validItems].sort(
       (a, b) => a.productId.localeCompare(b.productId)
     );
@@ -142,23 +177,18 @@ export default async function handler(
       .digest("hex");
 
     const db = getAdminDb();
-
-    // La orden queda asociada al usuario y al requestId.
     const orderId = `${userId}_${requestId}`;
-
     const orderRef = db.collection("orders").doc(orderId);
 
     const productRefs = validItems.map((item) =>
       db.collection("products").doc(item.productId)
     );
 
-    // 5. Ejecutar la compra mediante una transacción.
+    // 7. Crear la orden y descontar stock juntos.
     const result = await db.runTransaction(
       async (transaction) => {
         const existingOrder = await transaction.get(orderRef);
 
-        // Si ya existe, verificar que sea exactamente
-        // la misma solicitud de compra.
         if (existingOrder.exists) {
           const previousOrder = existingOrder.data();
 
@@ -181,7 +211,7 @@ export default async function handler(
           };
         }
 
-        // Todas las lecturas antes de las escrituras.
+        // Firestore requiere leer antes de escribir.
         const snapshots = await transaction.getAll(
           ...productRefs
         );
@@ -243,7 +273,8 @@ export default async function handler(
           });
         }
 
-        // 6. Calcular el total usando precios de Firestore.
+        // Los precios se obtienen de Firestore,
+        // nunca del total enviado por el navegador.
         const total = validatedProducts.reduce(
           (sum, product) => sum + product.subtotal,
           0
@@ -255,28 +286,16 @@ export default async function handler(
           );
         }
 
-        const orderItems = validatedProducts.map(
-          ({ productId, name, price, quantity, subtotal }) => ({
-            productId,
-            name,
-            price,
-            quantity,
-            subtotal,
-          })
-        );
-
-        // 7. Crear la orden.
         transaction.create(orderRef, {
           userId,
           requestId,
           cartFingerprint,
-          items: orderItems,
+          items: validatedProducts,
           total,
           status: "pending",
           createdAt: new Date().toISOString(),
         });
 
-        // 8. Descontar el stock real.
         for (let index = 0; index < validItems.length; index++) {
           transaction.update(productRefs[index], {
             stock: FieldValue.increment(
@@ -294,7 +313,6 @@ export default async function handler(
       }
     );
 
-    // 9. Devolver la confirmación.
     return res.status(result.alreadyProcessed ? 200 : 201).json({
       message: result.alreadyProcessed
         ? "Esta compra ya había sido registrada."
@@ -304,13 +322,16 @@ export default async function handler(
       status: result.status,
     });
   } catch (error) {
-    console.error("Error en checkout:", error);
-
     if (error instanceof CheckoutError) {
       return res.status(error.statusCode).json({
         error: error.message,
       });
     }
+
+    console.error(
+      "Error en checkout. Código:",
+      getErrorCode(error)
+    );
 
     return res.status(500).json({
       error: "No se pudo procesar la compra.",
