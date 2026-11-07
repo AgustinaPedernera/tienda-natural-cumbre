@@ -197,3 +197,33 @@ describe("integración entre sesión y carrito", () => {
     });
   });
 });
+
+
+it("conserva el carrito mientras se renueva el token de la misma cuenta", async () => {
+  const { result } = renderHook(useSessionAndCart, { wrapper: TestProviders });
+  await act(async () => {
+    await result.current.auth.login("cliente@example.com", "password-de-prueba");
+  });
+  act(() => { result.current.cart.addToCart("almendras"); });
+
+  let resolveToken!: (value: { claims: { role: string } }) => void;
+  const pendingToken = new Promise<{ claims: { role: string } }>((resolve) => {
+    resolveToken = resolve;
+  });
+  let pendingRefresh: void | Promise<void> = undefined;
+  act(() => {
+    pendingRefresh = firebaseMocks.listener?.({
+      ...fakeUser,
+      getIdTokenResult: () => pendingToken,
+    });
+  });
+  expect(result.current.auth.loading).toBe(true);
+  expect(result.current.cart.items).toEqual([{ productId: "almendras", quantity: 1 }]);
+
+  await act(async () => {
+    resolveToken({ claims: { role: "customer" } });
+    await pendingRefresh;
+  });
+  expect(result.current.auth.loading).toBe(false);
+  expect(result.current.cart.items).toEqual([{ productId: "almendras", quantity: 1 }]);
+});

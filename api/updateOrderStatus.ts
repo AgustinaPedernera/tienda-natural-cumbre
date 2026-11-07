@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getAdminAuth, getAdminDb } from "./firebaseAdmin.js";
+import { getAdminAuth, getAdminDb } from "../server/firebaseAdmin.js";
 
 type OrderStatus =
   | "pending"

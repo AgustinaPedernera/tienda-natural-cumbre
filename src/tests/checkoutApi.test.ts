@@ -34,7 +34,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
 }));
 
-vi.mock("../../api/firebaseAdmin.js", () => ({
+vi.mock("../../server/firebaseAdmin.js", () => ({
   getAdminAuth: mocks.getAdminAuth,
   getAdminDb: mocks.getAdminDb,
 }));

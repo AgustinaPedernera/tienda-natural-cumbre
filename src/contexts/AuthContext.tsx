@@ -51,7 +51,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const currentRevision = ++revision;
 
         setLoading(true);
-        setUser(null);
+        // Una renovación de token no equivale a cerrar sesión.
+        setUser((current) =>
+          firebaseUser && current?.id === firebaseUser.uid
+            ? current
+            : null
+        );
 
         if (!firebaseUser) {
           setLoading(false);

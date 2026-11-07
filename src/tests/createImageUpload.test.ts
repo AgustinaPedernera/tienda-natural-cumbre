@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   createPresignedPost: vi.fn(),
 }));
 
-vi.mock("../../api/firebaseAdmin.js", () => ({
+vi.mock("../../server/firebaseAdmin.js", () => ({
   getAdminAuth: mocks.getAdminAuth,
 }));
 
@@ -64,11 +64,11 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
 
   // Valores inventados: no usar credenciales reales.
-  vi.stubEnv("AWS_REGION", "sa-east-1");
+  vi.stubEnv("S3_REGION", "sa-east-1");
   vi.stubEnv("AWS_S3_BUCKET", "bucket-de-prueba");
-  vi.stubEnv("AWS_ACCESS_KEY_ID", "id-falso-para-tests");
+  vi.stubEnv("S3_ACCESS_KEY_ID", "id-falso-para-tests");
   vi.stubEnv(
-    "AWS_SECRET_ACCESS_KEY",
+    "S3_SECRET_ACCESS_KEY",
     "secreto-falso-para-tests"
   );
 
@@ -261,7 +261,7 @@ describe("autorización de imágenes S3", () => {
   });
 
   it("detecta configuración incompleta sin contactar AWS", async () => {
-    vi.stubEnv("AWS_SECRET_ACCESS_KEY", "");
+    vi.stubEnv("S3_SECRET_ACCESS_KEY", "");
 
     const response = await call();
 

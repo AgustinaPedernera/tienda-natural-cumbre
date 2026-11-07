@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomUUID } from "node:crypto";
 import { S3Client } from "@aws-sdk/client-s3";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
-import { getAdminAuth } from "./firebaseAdmin.js";
+import { getAdminAuth } from "../server/firebaseAdmin.js";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -109,15 +109,15 @@ export default async function handler(
       });
     }
 
-    const region = readVariable("AWS_REGION");
+    const region = readVariable("S3_REGION");
     const bucket = readVariable("AWS_S3_BUCKET");
 
     const s3 = new S3Client({
       region,
       credentials: {
-        accessKeyId: readVariable("AWS_ACCESS_KEY_ID"),
+        accessKeyId: readVariable("S3_ACCESS_KEY_ID"),
         secretAccessKey: readVariable(
-          "AWS_SECRET_ACCESS_KEY"
+          "S3_SECRET_ACCESS_KEY"
         ),
       },
     });

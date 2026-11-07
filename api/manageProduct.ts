@@ -4,7 +4,7 @@ import {
   HeadObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { getAdminAuth, getAdminDb } from "./firebaseAdmin.js";
+import { getAdminAuth, getAdminDb } from "../server/firebaseAdmin.js";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -136,7 +136,7 @@ async function validateProductImage(
     webp: "image/webp",
   };
 
-  const region = readVariable("AWS_REGION");
+  const region = readVariable("S3_REGION");
   const bucket = readVariable("AWS_S3_BUCKET");
   const cloudFront = new URL(
     readVariable("AWS_CLOUDFRONT_URL")
@@ -159,8 +159,8 @@ async function validateProductImage(
     region,
     maxAttempts: 2,
     credentials: {
-      accessKeyId: readVariable("AWS_ACCESS_KEY_ID"),
-      secretAccessKey: readVariable("AWS_SECRET_ACCESS_KEY"),
+      accessKeyId: readVariable("S3_ACCESS_KEY_ID"),
+      secretAccessKey: readVariable("S3_SECRET_ACCESS_KEY"),
     },
   });
 

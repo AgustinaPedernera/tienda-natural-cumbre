@@ -52,25 +52,26 @@ function loadLocalServerVariables() {
 
   const localVariables = parseEnv(content);
 
-  const serverVariables = [
-    "FIREBASE_PROJECT_ID",
-    "FIREBASE_CLIENT_EMAIL",
-    "FIREBASE_PRIVATE_KEY",
-    "AWS_REGION",
-    "AWS_S3_BUCKET",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_SECRET_ACCESS_KEY",
-    "AWS_CLOUDFRONT_URL",
-  ];
+  const serverVariables: Record<string, string> = {
+    FIREBASE_PROJECT_ID: "FIREBASE_PROJECT_ID",
+    FIREBASE_CLIENT_EMAIL: "FIREBASE_CLIENT_EMAIL",
+    FIREBASE_PRIVATE_KEY: "FIREBASE_PRIVATE_KEY",
+    S3_REGION: "AWS_REGION",
+    AWS_S3_BUCKET: "AWS_S3_BUCKET",
+    S3_ACCESS_KEY_ID: "AWS_ACCESS_KEY_ID",
+    S3_SECRET_ACCESS_KEY: "AWS_SECRET_ACCESS_KEY",
+    AWS_CLOUDFRONT_URL: "AWS_CLOUDFRONT_URL",
+  };
 
-  for (const name of serverVariables) {
-    // Conserva las variables que ya recibió el servidor.
-    // Completa únicamente las ausentes o vacías.
-    if (
-      !process.env[name]?.trim() &&
-      localVariables[name]?.trim()
-    ) {
-      process.env[name] = localVariables[name];
+  for (const [name, legacyName] of Object.entries(serverVariables)) {
+    // Las claves antiguas se aceptan solo desde el archivo local.
+    // En Vercel se usan los nombres S3_* para no depender
+    // de variables AWS_* reservadas por la plataforma.
+    const value = localVariables[name]?.trim()
+      ? localVariables[name]
+      : localVariables[legacyName];
+    if (!process.env[name]?.trim() && value?.trim()) {
+      process.env[name] = value;
     }
   }
 }
