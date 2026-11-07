@@ -262,11 +262,19 @@ export function CartPage() {
           ))}
 
           {hasMissingProducts && (
-            <p role="alert">
+            <section role="alert">
+            {items.filter((item) => !products.some((product) => product.id === item.productId)).map((item) => (
+              <div key={item.productId}>
+                <span>Producto no disponible</span>{" "}
+                <button type="button" disabled={isProcessing} onClick={() => removeFromCart(item.productId)}>Eliminar producto no disponible</button>
+              </div>
+            ))}
+            <p>
               Algunos productos del carrito ya no están
               disponibles. Eliminá esos productos antes de
               continuar.
             </p>
+            </section>
           )}
 
           <h2>
@@ -331,3 +339,4 @@ export function CartPage() {
     </main>
   );
 }
+

@@ -1,3 +1,13 @@
+> **Actualización de desarrollo:** consultá [la etapa 1](docs/ETAPA-1.md) para la configuración actual y el plan de trabajo. Las secciones de homework siguientes conservan documentación histórica.
+
+## Bitácora de IA — trabajo verificado
+
+| Fecha | Tema | Aporte de IA y decisión | Evidencia / verificación |
+|---|---|---|---|
+| 2026-11-06 | Revisión y resolución de configuración | Se contrastó `API_KEY_INVALID` con el código. Se decidió validar variables vacías antes de inicializar Firebase, sin afirmar que eso valide la clave ante Google. | `src/config/environment.ts`, `src/main.tsx` y tests de configuración. Pendiente comprobar la configuración real de Firebase. |
+
+Se agregarán entradas a medida que se completen decisiones y verificaciones reales.
+
 # E-commerce de Productos Naturales 🌿🥜
 
 ## Proyecto Integrador — Módulo 5

@@ -36,4 +36,3 @@ firebase-service-account.json
 *.sw?
 
 .vercel
-.env*
