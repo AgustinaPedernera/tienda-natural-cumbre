@@ -12,7 +12,8 @@
     "test:run": "vitest run",
     "dev:full": "vercel dev",
     "dev:local": "node --env-file=.env.local --run dev:full",
-    "check": "npm run test:run && npm run build"
+    "check": "npm run test:server-runtime && npm run test:run && npm run build",
+    "test:server-runtime": "node --no-experimental-require-module scripts/checkServerRuntime.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1164.0",
@@ -41,7 +42,10 @@
     "vitest": "^5.0.5"
   },
   "overrides": {
-    "@grpc/grpc-js": "1.14.7"
+    "@grpc/grpc-js": "1.14.7",
+    "jwks-rsa": {
+      "jose": "5.10.0"
+    }
   },
   "engines": {
     "node": "24.x"

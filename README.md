@@ -98,7 +98,7 @@ npm run build
 npm run check
 ```
 
-La revisión de cierre ejecutó **76 pruebas en 7 archivos**, todas aprobadas, y compiló frontend y funciones TypeScript. Las pruebas utilizan mocks de Firebase y AWS; no sustituyen pruebas contra servicios reales ni acreditan un despliegue público. La integración continua ejecuta `npm run check` con Node 24.
+La revisión de cierre ejecutó **76 pruebas en 7 archivos**, todas aprobadas, y compiló frontend y funciones TypeScript. Las pruebas utilizan mocks de Firebase y AWS; no sustituyen pruebas contra servicios reales ni acreditan un despliegue público. La integración continua ejecuta `npm run check` con Node 24. Ese comando también carga Firebase Admin sin mocks y verifica la conversión de una clave RSA, con `require(ESM)` deshabilitado para detectar incompatibilidades del runtime. Se fija `jose@5.10.0` únicamente dentro de `jwks-rsa`: la versión ESM 6 falló al arrancar la función en Vercel. Esta compatibilidad debe revisarse al actualizar Firebase Admin o el runtime.
 
 | Archivo de pruebas | Casos |
 | --- | ---: |
