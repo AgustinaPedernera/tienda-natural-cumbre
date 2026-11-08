@@ -2,7 +2,12 @@
 
 E-commerce de productos naturales desarrollado con React 18, TypeScript, Vite y Tailwind CSS 4. Firebase administra las cuentas y los datos; las funciones de Vercel validan las compras, los permisos administrativos y las cargas de imágenes a Amazon S3.
 
-Proyecto integrador del Módulo 5. **El checkout registra órdenes; el pago es simulado.** La URL pública está pendiente de configurar y verificar en Vercel.
+Proyecto integrador del Módulo 5. **El checkout registra órdenes; el pago es simulado.** 
+
+**Aplicación:** https://tienda-natural-cumbre.vercel.app  
+**Repositorio:** https://github.com/AgustinaPedernera/tienda-natural-cumbre
+
+Cumbre es un emprendimiento de productos naturales que necesita centralizar su catálogo, las compras y la administración del stock. La identidad visual toma como referencia sus flyers: verdes, crema y amarillo maíz. La propietaria puede gestionar productos y órdenes desde la aplicación; las credenciales y el despliegue quedan a cargo del mantenimiento técnico.
 
 ## Funcionalidades
 
@@ -73,7 +78,7 @@ server/             inicialización privada de Firebase Admin
 scripts/            asignación del rol administrador
 ```
 
-Context comparte la sesión y el catálogo; `useReducer` mantiene explícitas las operaciones del carrito. Los providers se componen como `AuthProvider → ProductsProvider → CartProvider`. El carrito se vacía al salir o cambiar de cuenta y conserva sus artículos durante una renovación de token de la misma cuenta. Se guarda en memoria: recargar la página lo reinicia.
+Se eligió Context API porque el estado compartido se concentra en tres dominios acotados y no requiere incorporar otra biblioteca de estado. Context comparte la sesión y el catálogo; `useReducer` mantiene explícitas las operaciones del carrito. Los providers se componen como `AuthProvider → ProductsProvider → CartProvider`. El carrito se vacía al salir o cambiar de cuenta y conserva sus artículos durante una renovación de token de la misma cuenta. Se guarda en memoria: recargar la página lo reinicia.
 
 Las páginas se cargan con `React.lazy` y `Suspense`. Se conserva la agrupación automática de Vite: una separación manual de Firebase produjo un error de inicialización en el navegador y se retiró. Actualmente permanece la advertencia del bundle principal de aproximadamente 754 kB sin comprimir; el build termina correctamente. Reducir ese tamaño es una mejora pendiente, que requiere verificar el comportamiento en el navegador.
 
@@ -87,6 +92,8 @@ Los estados administrativos incluyen pendiente, en preparación, completada y ca
 
 ### Imágenes
 
+Se eligió S3 para separar los archivos binarios de los documentos de Firestore y permitir cargas directas desde el navegador mediante autorizaciones temporales. CloudFront distribuye las imágenes sin abrir el bucket al acceso público directo. La aplicación usa un POST prefirmado: es una variante del flujo de presigned URLs con URL, campos y restricciones firmadas.
+
 El administrador solicita un formulario firmado a `/api/createImageUpload` y el navegador envía el archivo directamente a S3. Se aceptan JPG, PNG y WebP de hasta 5 MiB; la autorización de carga vence en 60 segundos. El servidor elige el nombre y, antes de guardar el producto, comprueba metadatos y bytes iniciales del objeto. Esto no equivale a un análisis antivirus ni a decodificar la imagen completa. La limpieza de imágenes huérfanas queda pendiente.
 
 ## Validación
@@ -94,7 +101,7 @@ El administrador solicita un formulario firmado a `/api/createImageUpload` y el 
 ```powershell
 npm run test:run
 npm run build
-# Ambos en secuencia:
+# Runtime real, pruebas y build en secuencia:
 npm run check
 ```
 
@@ -112,9 +119,13 @@ La revisión de cierre ejecutó **76 pruebas en 7 archivos**, todas aprobadas, y
 
 El mensaje esperado de `useCart` fuera de su provider corresponde a una prueba del guard, cuando aparece en la salida de React/jsdom. El resumen final de Vitest determina si el test pasó.
 
-## Entrega y próximos pasos
+## Entrega y verificación manual
 
-Consultar la [guía de Vercel y comprobación final](docs/DEPLOY.md) y el [guion de demostración](docs/DEFENSA.md). Falta configurar los secretos en Vercel, probar la aplicación desplegada y agregar aquí su URL real. La paginación actual funciona sobre el catálogo descargado completo; para catálogos grandes conviene consultar Firestore por páginas. No hay cobros reales ni gestión de entregas.
+Durante el cierre, la autora realizó compras, consultó el detalle de pedidos y accedió con una cuenta administradora para completar una orden y gestionar productos. Se comprobó la creación de un producto con imagen, su actualización y eliminación. Las capturas compartidas de estos flujos corresponden a una Preview; la autora también informó haber actualizado Production y realizado las comprobaciones de compras y CRUD. El registro distingue estas evidencias de una auditoría independiente del dominio principal.
+
+Consultar el [registro de verificación](docs/VERIFICACION.md), la [guía de Vercel y mantenimiento](docs/DEPLOY.md) y la [presentación y guion de defensa](docs/DEFENSA.md).
+
+La paginación actual funciona sobre el catálogo descargado completo; no implementa el extra de cursores `limit()` y `startAfter()` de Firestore. No hay cobros reales, gestión de entregas ni limpieza automática de imágenes huérfanas. El carrito vive en Context y se reinicia al recargar. No se implementaron los extras de analytics ni reviews.
 
 ## Bitácora de uso de IA
 
@@ -129,6 +140,13 @@ ChatGPT acompañó la implementación y revisión; las decisiones se contrastaro
 | Hacía falta comprobar carrito y compra | Añadir pruebas del reducer, hooks, integración, checkout y carga de imágenes | La autora compartió 75 pruebas aprobadas antes del cierre |
 | El build advertía un bundle grande | Cargar páginas por separado; ensayar agrupación de dependencias y retirar la separación que rompía Firebase | Un build exitoso no garantiza que el navegador arranque; se probó con preview |
 | La renovación del token podía parecer una salida de sesión | Conservar la identidad durante la comprobación del token de la misma cuenta | Una prueba nueva falló antes de corregirlo y pasó después; total: 76 |
-| Preparación para Vercel | Sacar el helper de `api`, declarar Firebase Admin en dependencias de servidor y comprobar TypeScript de las funciones | Build de cierre aprobado; verificación del despliegue todavía pendiente |
+| Planificación de arquitectura | Distribuir responsabilidades entre contexts, reducer, servicios, páginas y funciones | Se mantuvo el carrito como referencias a productos y la autorización de escrituras en el servidor; ver estructura y arquitectura |
+| Revisión de código de sesión | Se detectó que borrar el usuario al renovar el token vaciaba el carrito | Se añadió una regresión que falló antes de la corrección y pasó después; `CartIntegration.test.tsx` |
+| Preparación para Vercel | Sacar el helper de `api`, declarar Firebase Admin en dependencias de servidor y comprobar TypeScript de las funciones | Se distinguió el build del frontend de la ejecución real de los endpoints |
+| Checkout caído con `ERR_REQUIRE_ESM` | Revisar la cadena Firebase Admin → jwks-rsa → jose y limitar el override de jose a esa dependencia | Se reprodujo el fallo con `require(ESM)` deshabilitado; `scripts/checkServerRuntime.mjs` comprueba carga y conversión RSA sin mocks |
+| Firebase Admin rechazaba la clave privada | Interpretar el código `config/invalid-private-key-format`, extraer `private_key` del JSON y copiarla sin imprimirla | Se aprendió a distinguir clave, nombre de variable, formato y entorno; después del redeploy se registró un pedido por $15.600 |
+| Google fallaba en nuevas Preview | Comparar el dominio abierto con los dominios autorizados de Firebase | Misma cuenta no implica mismo origen; usar dominio fijo para operación y una dirección estable para pruebas |
+| Carga a S3 bloqueada aunque respondía 204 | Revisar CORS y autorizar los orígenes HTTPS exactos, conservando POST y el bucket privado | Tras el cambio, la autora creó el producto con imagen y comprobó su edición y eliminación |
+| Deploys repetidos conservaban el error anterior | Comparar Source y commit, no solo la fecha o estado Ready | Redeploy reconstruye el mismo commit: se seleccionó `95cb2ba`, que contenía la corrección, y se verificó el checkout |
 
 La documentación de las primeras homeworks, con sus decisiones y bitácora originales, se conserva en [Historial de homeworks](docs/HISTORIAL-HOMEWORKS.md). Describe etapas anteriores y no el estado actual del producto.

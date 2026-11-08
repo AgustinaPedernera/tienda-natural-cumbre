@@ -1,6 +1,6 @@
 # Publicar y comprobar en Vercel
 
-La configuración del repositorio está preparada. Esta guía no acredita un despliegue realizado. No pegar claves privadas en GitHub, en el README ni en el chat.
+La tienda dispone del dominio público https://tienda-natural-cumbre.vercel.app. Esta guía permite reproducir el despliegue y mantenerlo; la evidencia de las pruebas realizadas está en [VERIFICACION.md](VERIFICACION.md). No pegar claves privadas en GitHub, en el README ni en el chat.
 
 ## 1. Proyecto
 
@@ -44,8 +44,18 @@ Con una cuenta cliente y otra administradora, usando productos de prueba:
 
 Las pruebas de frontend con mocks y `npm run preview` no validan estas integraciones del despliegue. Usar la URL de Vercel para la aceptación completa.
 
-## 5. Cierre de entrega
+## 5. Operación y mantenimiento
 
-Agregar al README la URL pública comprobada, conservar la URL del repositorio y registrar fecha y resultado de la prueba de aceptación. Revisar que GitHub Actions esté verde y que ningún secreto haya sido incluido en los cambios.
+La propietaria usa el dominio principal para administrar productos, fotos y pedidos. Estas acciones no requieren un deploy ni cambios de dominios. Quien mantiene el proyecto administra Firebase, AWS, GitHub y Vercel.
+
+- Usar el dominio principal estable para la operación diaria. Autorizarlo una vez en Firebase Authentication y en los orígenes CORS de S3.
+- Para pruebas, usar una dirección estable de rama o un subdominio de pruebas. Las URL únicas de cada deploy son orígenes diferentes y, si se usan, requieren sus propias autorizaciones.
+- Antes de desplegar, verificar el commit de Source. `Redeploy` conserva el código de ese despliegue; no toma automáticamente los últimos cambios de la rama.
+- Preview y Production tienen variables separadas. Guardar una clave correcta en Preview no modifica Production. Cambiar variables requiere un nuevo despliegue del entorno correspondiente.
+- Para diagnosticar, revisar el error de la solicitud reciente en Logs de Vercel. Un 500 del navegador no identifica por sí solo la causa.
+- Una vez finalizadas las pruebas, retirar los dominios temporales que ya no se utilicen, conservando los dominios operativos y los predeterminados necesarios.
+- Revisar CI, dependencias y presupuestos de AWS periódicamente. Mantener los accesos de recuperación y la titularidad de las cuentas documentados fuera del repositorio público.
+
+El registro de aceptación está en `docs/VERIFICACION.md`. La integración a `main` debe realizarse desde el PR revisado y verificando que Vercel tenga esa rama configurada para futuras publicaciones.
 
 Pendientes conocidos: pago simulado, sin logística de entrega, carrito en memoria, paginación en cliente, imágenes huérfanas sin limpieza automática y advertencia de tamaño del bundle principal. No subir el límite de Vite para ocultar esa advertencia. Evitar `npm audit fix --force`: revisar las actualizaciones y sus cambios incompatibles por separado.
