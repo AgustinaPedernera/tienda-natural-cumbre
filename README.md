@@ -1,547 +1,152 @@
-# E-commerce de Productos Naturales 🌿🥜
+# Tienda Cumbre 🌿
 
-## Proyecto Integrador — Módulo 5
+E-commerce de productos naturales desarrollado con React 18, TypeScript, Vite y Tailwind CSS 4. Firebase administra las cuentas y los datos; las funciones de Vercel validan las compras, los permisos administrativos y las cargas de imágenes a Amazon S3.
 
+Proyecto integrador del Módulo 5. **El checkout registra órdenes; el pago es simulado.** 
 
-Aplicación desarrollada con **React, TypeScript y Vite**, cuyo objetivo es establecer las bases arquitectónicas de una tienda online de productos naturales y frutos secos.
+**Aplicación:** https://tienda-natural-cumbre.vercel.app  
+**Repositorio:** https://github.com/AgustinaPedernera/tienda-natural-cumbre
 
-Esta primera etapa se enfoca en la organización del proyecto, el tipado de datos, la administración del estado global mediante Context API y la integración entre diferentes dominios.
+Cumbre es un emprendimiento de productos naturales que necesita centralizar su catálogo, las compras y la administración del stock. La identidad visual toma como referencia sus flyers: verdes, crema y amarillo maíz. La propietaria puede gestionar productos y órdenes desde la aplicación; las credenciales y el despliegue quedan a cargo del mantenimiento técnico.
 
-El proyecto está pensado para evolucionar progresivamente durante el módulo.
+## Funcionalidades
 
-## 1. Tecnologías utilizadas
+- Catálogo con búsqueda, categorías, paginación y detalle de producto.
+- Carrito con cantidades, disponibilidad y confirmación de compra.
+- Registro, ingreso con correo o Google y recuperación de contraseña.
+- Historial de compras de cada cliente.
+- Administración de productos e imágenes y gestión de estados de las órdenes.
+- Tema claro y oscuro, identidad Cumbre, favicon y diseño desde móvil.
 
-- React
-- TypeScript
-- Vite
-- Context API
-- Custom Hooks
-- Vitest
-- React Testing Library
-- jsdom
+## Ejecutar localmente
 
-## 2. Estructura del proyecto
+Usar **Node.js 24 LTS** y npm. Desde la carpeta que contiene `package.json`:
+
+```powershell
+npm ci
+Copy-Item .env.example .env.local
+```
+
+Completar `.env.local` con la configuración de Firebase y AWS. No subir este archivo ni las claves privadas. Luego:
+
+```powershell
+npm run dev:local
+```
+
+Este comando inicia `vercel dev` con las variables locales. Puede solicitar iniciar sesión y vincular el proyecto de Vercel la primera vez. Usar la dirección que imprime la terminal.
+
+`npm run dev` y `npm run preview` sirven la interfaz, pero **no ejecutan las funciones de `api/`**. Para comprar o cargar imágenes localmente se necesita `dev:local`.
+
+| Variables | Uso |
+| --- | --- |
+| `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` | Configuración pública del mismo proyecto Firebase |
+| `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID` | Resto de la configuración de la aplicación web Firebase |
+| `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Credenciales privadas de Firebase Admin, solo servidor |
+| `S3_REGION`, `AWS_S3_BUCKET` | Región y bucket de imágenes |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Credenciales IAM, solo servidor |
+| `AWS_CLOUDFRONT_URL` | URL HTTPS de distribución de las imágenes |
+
+La clave privada admite saltos de línea o `\n`. Las credenciales del servidor nunca llevan el prefijo `VITE_`. El helper admite los antiguos nombres `AWS_REGION`, `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY` desde `.env.local`; para nuevas configuraciones y Vercel usar los nombres `S3_*` de la tabla.
+
+## Servicios externos
+
+En Firebase habilitar Email/Password y Google en Authentication, registrar los dominios autorizados y crear Firestore. El archivo [`firestore.rules`](firestore.rules) contiene las reglas propuestas: lectura pública de productos, lectura de órdenes por su dueño o por un administrador, y escrituras exclusivamente mediante el servidor. Revisar y publicar estas reglas en Firebase; guardarlas en Git no las aplica automáticamente.
+
+Una cuenta nueva es cliente. Para otorgar el rol administrador a una cuenta existente, obtener su UID desde Firebase Authentication y ejecutar con credenciales de un administrador del proyecto:
+
+```powershell
+node --env-file=.env.local scripts/setAdmin.mjs UID_DE_LA_CUENTA
+```
+
+Después cerrar sesión y volver a ingresar. Ocultar una pantalla en React no concede ni reemplaza permisos: los endpoints verifican el token y el rol.
+
+En S3 configurar un bucket privado y CORS para los orígenes de la tienda, método `POST`. Dar al usuario IAM permisos limitados a los objetos `products/*` necesarios para subir y verificar imágenes. CloudFront debe tener acceso de lectura al bucket privado; las imágenes de productos se distribuyen públicamente por CloudFront.
+
+## Arquitectura
 
 ```text
 src/
-├── components/
-│   ├── ProductCard.tsx
-│   └── ProductGrid.tsx
-├── contexts/
-│   ├── AuthContext.tsx
-│   ├── ProductsContext.tsx
-│   └── CartContext.tsx
-├── hooks/
-│   ├── useAuth.ts
-│   ├── useProducts.ts
-│   └── useCart.ts
-├── mocks/
-│   └── henryProducts.ts
-├── pages/
-│   └── ProductsPage.tsx
-├── providers/
-│   └── AppProviders.tsx
-├── services/
-│   └── productsService.ts
-├── tests/
-│   ├── useCart.test.tsx
-│   └── CartIntegration.test.tsx
-├── types/
-│   ├── product.ts
-│   ├── cart.ts
-│   └── user.ts
-├── App.tsx
-└── main.tsx
+  components/       tarjetas, grilla, navegación y paginación
+  contexts/         autenticación, catálogo y carrito
+  reducers/         transiciones del carrito
+  hooks/            acceso tipado a los contexts
+  pages/            catálogo, detalle, cuenta, compras y administración
+  services/         Firestore y llamadas HTTP
+  tests/            pruebas de hooks, integración y endpoints
+api/                checkout, manageProduct, updateOrderStatus, createImageUpload
+server/             inicialización privada de Firebase Admin
+scripts/            asignación del rol administrador
 ```
 
-### Responsabilidades de las carpetas
+Se eligió Context API porque el estado compartido se concentra en tres dominios acotados y no requiere incorporar otra biblioteca de estado. Context comparte la sesión y el catálogo; `useReducer` mantiene explícitas las operaciones del carrito. Los providers se componen como `AuthProvider → ProductsProvider → CartProvider`. El carrito se vacía al salir o cambiar de cuenta y conserva sus artículos durante una renovación de token de la misma cuenta. Se guarda en memoria: recargar la página lo reinicia.
 
-| Carpeta | Responsabilidad |
-|---|---|
-| `components/` | Contiene componentes reutilizables de la interfaz. |
-| `pages/` | Organiza las páginas principales de la aplicación. |
-| `contexts/` | Define los estados globales y sus Providers. |
-| `hooks/` | Centraliza el acceso a los Contexts mediante custom hooks con guards. |
-| `providers/` | Compone los Providers en el orden requerido. |
-| `services/` | Centraliza el acceso a los datos del catálogo. |
-| `types/` | Define los contratos de datos utilizados por la aplicación. |
-| `mocks/` | Contiene datos de ejemplo para desarrollo y pruebas. |
-| `tests/` | Contiene pruebas automatizadas de comportamiento e integración. |
+Las páginas se cargan con `React.lazy` y `Suspense`. Se conserva la agrupación automática de Vite: una separación manual de Firebase produjo un error de inicialización en el navegador y se retiró. Actualmente permanece la advertencia del bundle principal de aproximadamente 754 kB sin comprimir; el build termina correctamente. Reducir ese tamaño es una mejora pendiente, que requiere verificar el comportamiento en el navegador.
 
-Esta separación permite mantener responsabilidades claras y facilita la incorporación de nuevas funcionalidades sin concentrar toda la lógica en un único componente.
+### Compra y datos
 
-## 3. Modelo de datos
+`products` contiene nombre, categoría, precio entero en pesos, stock y, opcionalmente, URL/clave de imagen y versión administrativa. El carrito guarda referencias `{ productId, quantity }`.
 
-Se definieron tres interfaces principales.
+`POST /api/checkout` valida el token y las cantidades, vuelve a leer precios y stock desde Firestore y crea la orden junto con el descuento de stock en una transacción. `requestId` y la huella del carrito permiten reintentar una solicitud sin descontar dos veces. Las órdenes guardan una copia de los artículos, precios, cantidades, total, usuario y estado; cambios posteriores del catálogo no alteran esa compra.
 
-### Product
+Los estados administrativos incluyen pendiente, en preparación, completada y cancelada. La cancelación repone stock en una transacción y evita reponerlo dos veces. Las operaciones de productos validan permisos y conflictos de versión; no se permite borrar productos referenciados por órdenes abiertas.
 
-Representa un producto del catálogo.
+### Imágenes
 
-Incluye:
+Se eligió S3 para separar los archivos binarios de los documentos de Firestore y permitir cargas directas desde el navegador mediante autorizaciones temporales. CloudFront distribuye las imágenes sin abrir el bucket al acceso público directo. La aplicación usa un POST prefirmado: es una variante del flujo de presigned URLs con URL, campos y restricciones firmadas.
 
-- `id`: identificador único.
-- `name`: nombre del producto.
-- `price`: precio.
-- `stock`: unidades disponibles.
-- `category`: categoría.
-- `rating?`: calificación opcional.
-- `imageUrl?`: imagen opcional.
+El administrador solicita un formulario firmado a `/api/createImageUpload` y el navegador envía el archivo directamente a S3. Se aceptan JPG, PNG y WebP de hasta 5 MiB; la autorización de carga vence en 60 segundos. El servidor elige el nombre y, antes de guardar el producto, comprueba metadatos y bytes iniciales del objeto. Esto no equivale a un análisis antivirus ni a decodificar la imagen completa. La limpieza de imágenes huérfanas queda pendiente.
 
-Los campos opcionales permiten representar productos que todavía no tienen calificación o imagen.
+## Validación
 
-### CartItem
-
-Representa un producto agregado al carrito.
-
-Incluye:
-
-- `productId`: referencia al producto.
-- `quantity`: cantidad seleccionada.
-
-Se utiliza `productId` en lugar de duplicar toda la información del producto dentro del carrito.
-
-### User
-
-Representa un usuario de la aplicación.
-
-Incluye:
-
-- `id`
-- `name`
-- `email`
-- `role`
-
-El rol está restringido mediante un tipo unión a `"customer"` o `"admin"`.
-
-## 4. Estado global con Context API
-
-Se implementaron tres Contexts.
-
-### AuthContext
-
-Administra la autenticación del usuario.
-
-Expone:
-
-- `user`
-- `isAuthenticated`
-- `login()`
-- `logout()`
-
-### ProductsContext
-
-Administra el catálogo de productos y expone `products`.
-
-En esta primera etapa utiliza información mockeada, sin conexión a una API externa.
-
-### CartContext
-
-Administra los productos agregados al carrito.
-
-Expone:
-
-- `items`
-- `addToCart()`
-- `removeFromCart()`
-- `clearCart()`
-
-También consulta `useAuth()` para detectar cambios de usuario y vaciar el carrito cuando corresponde.
-
-## 5. Árbol de Providers
-
-```mermaid
-flowchart TD
-    A["main.tsx"] --> B["AppProviders"]
-    B --> C["AuthProvider"]
-    C --> D["ProductsProvider"]
-    D --> E["CartProvider"]
-    E --> F["App"]
-    F --> G["ProductsPage"]
-    G --> H["ProductGrid"]
-    H --> I["ProductCard"]
-```
-
-### Justificación del orden
-
-El orden de composición utilizado es:
-
-1. `AuthProvider`
-2. `ProductsProvider`
-3. `CartProvider`
-
-`AuthProvider` se ubica en el nivel superior porque la autenticación puede ser necesaria para otros dominios.
-
-`ProductsProvider` administra el catálogo y queda disponible para los componentes descendientes.
-
-`CartProvider` se encuentra dentro de `AuthProvider` porque utiliza `useAuth()` para consultar al usuario autenticado.
-
-Este orden permite compartir información entre dominios sin transmitirla manualmente a través de múltiples componentes.
-
-## 6. Custom Hooks y Guards
-
-Se implementaron tres custom hooks:
-
-- `useAuth()`
-- `useProducts()`
-- `useCart()`
-
-Cada hook utiliza `useContext()` para acceder a su Context correspondiente.
-
-Además, incluye un guard que arroja un error cuando se intenta utilizar fuera del Provider.
-
-Ejemplo:
-
-```ts
-if (context === undefined) {
-  throw new Error(
-    "useCart debe utilizarse dentro de CartProvider"
-  );
-}
-```
-
-Esta protección permite detectar errores de implementación y facilita la depuración.
-
-## 7. Integración entre Contexts
-
-Se implementó una integración real entre `AuthContext` y `CartContext`.
-
-`CartProvider` utiliza `useAuth()` para conocer el usuario actual.
-
-Cuando un usuario autenticado cierra sesión o cambia por otro usuario, el carrito se vacía.
-
-Esta integración demuestra cómo un Provider puede acceder a información de otro dominio sin necesidad de prop drilling.
-
-En esta etapa no se implementó persistencia del carrito en una base de datos ni en almacenamiento local.
-
-## 8. Demostración de anti-prop drilling
-
-La interfaz utiliza la siguiente jerarquía:
-
-```text
-ProductsPage
-    └── ProductGrid
-            └── ProductCard
-```
-
-`ProductGrid` consulta `useProducts()` para obtener el catálogo.
-
-Cada `ProductCard` recibe el producto que debe mostrar, pero obtiene `addToCart()` directamente mediante `useCart()`.
-
-Por lo tanto, no es necesario pasar las funciones del carrito a través de `ProductsPage` y `ProductGrid`.
-
-Se mantienen las props para los datos específicos de cada componente y se utiliza Context API para compartir el estado global.
-
-## 9. Productos de ejemplo
-
-La aplicación está personalizada como una tienda de productos naturales y frutos secos.
-
-El catálogo inicial incluye:
-
-- Almendras Naturales 250 g.
-- Nueces Mariposa 250 g.
-- Mix de Frutos Secos 500 g.
-
-Los precios, stocks y calificaciones utilizados son datos ficticios para el desarrollo académico.
-
-Además, se conserva un conjunto separado de ejemplos solicitados por Henry:
-
-- `p1` — Zapatillas Runner Pro.
-- `p2` — Mochila Ergonómica.
-- `p3` — Auriculares ANC.
-
-Esta separación permite mantener la identidad del proyecto sin perder los ejemplos académicos de referencia.
-
-## 10. Tests automatizados
-
-Se implementaron dos pruebas con Vitest y React Testing Library.
-
-### Test 1: Guard de useCart
-
-Archivo: `src/tests/useCart.test.tsx`
-
-Comprueba que `useCart()` arroje el error esperado cuando se utiliza fuera de `CartProvider`.
-
-### Test 2: Integración entre autenticación y carrito
-
-Archivo: `src/tests/CartIntegration.test.tsx`
-
-Comprueba que:
-
-1. Un usuario pueda iniciar sesión.
-2. Se pueda agregar un producto al carrito.
-3. Al cerrar sesión, el carrito quede vacío.
-
-Ambos tests se ejecutaron correctamente.
-
-Para ejecutar las pruebas:
-
-```bash
-npm run test
-```
-
-O directamente:
-
-```bash
-npm exec vitest run
-```
-
-## 11. Bitácora de IA
-
-Durante el desarrollo se utilizó ChatGPT como herramienta de apoyo para revisar el diseño de tipos, la organización de los Providers, la integración entre Contexts y la implementación de pruebas.
-
-Las decisiones se evaluaron considerando los requisitos de la homework y el alcance académico del proyecto.
-
-### Iteración 1 — Revisión del modelo de datos
-
-**Prompt utilizado:**
-
-> Revisá las interfaces TypeScript Product, CartItem y User de un e-commerce desarrollado con React y Context API. Evaluá los campos, la opcionalidad, las relaciones entre entidades y los nombres utilizados. Proponé mejoras que mantengan el proyecto sencillo, porque se trata de un kickoff académico y no de un e-commerce de producción.
-
-**Sugerencia de la IA:**
-
-Mantener identificadores claros, utilizar propiedades opcionales cuando los datos no sean obligatorios y relacionar los elementos del carrito con el catálogo mediante `productId`.
-
-También se señalaron posibles mejoras futuras, como validar cantidades, tipar categorías de manera más estricta y agregar variantes de presentación.
-
-**Criterio humano:**
-
-Se decidió mantener las interfaces actuales porque representan correctamente los datos necesarios para esta etapa.
-
-Se conservaron `rating?` e `imageUrl?` como opcionales y se mantuvo `productId` como referencia al catálogo.
-
-**Resultado aplicado:**
-
-Se validó el diseño existente y se decidió conservarlo sin agregar campos innecesarios.
-
-**Resultado descartado:**
-
-No se incorporaron variantes de peso, descuentos, direcciones ni entidades de pago, porque exceden los requisitos de esta homework.
-
-### Iteración 2 — Revisión de la composición de Providers
-
-**Prompt utilizado:**
-
-> Auditá una arquitectura React con tres Providers anidados en este orden: AuthProvider → ProductsProvider → CartProvider. CartProvider utiliza useAuth() para vaciar el carrito cuando cambia el usuario. Evaluá el orden, los riesgos de re-render, el acoplamiento entre Contexts y posibles mejoras sin introducir librerías adicionales.
-
-**Sugerencia de la IA:**
-
-Mantener `AuthProvider` por encima de `CartProvider` para que este último pueda acceder correctamente a `useAuth()`.
-
-Se identificó que los objetos y funciones proporcionados mediante Context pueden generar nuevas referencias durante los renderizados, y que herramientas como `useMemo()` y `useCallback()` podrían ser útiles si aparecen problemas de rendimiento.
-
-También se recomendó mantener explícita la dependencia entre autenticación y carrito.
-
-**Criterio humano:**
-
-Se aceptó mantener el orden obligatorio y la integración mediante `useAuth()`.
-
-Se decidió no agregar optimizaciones prematuras, ya que el proyecto es pequeño y todavía no presenta una necesidad demostrada de optimización.
-
-**Resultado aplicado:**
-
-Se conservó el orden de `AppProviders` y la lógica de limpieza del carrito ante cambios del usuario.
-
-La integración se verificó mediante un test automatizado.
-
-**Resultado descartado:**
-
-No se incorporó Redux ni una capa adicional de administración de estado. Context API resulta suficiente para esta etapa.
-
-### Revisión de la integración entre useAuth, useCart y useProducts
-
-La IA también se utilizó para revisar las dependencias entre dominios.
-
-Se comprobó que:
-
-- `CartProvider` accede a autenticación mediante `useAuth()`.
-- `ProductsContext` administra el catálogo sin depender de la autenticación.
-- `ProductGrid` obtiene los productos mediante `useProducts()`.
-- `ProductCard` utiliza `useCart()` directamente.
-- Los componentes no necesitan recibir funciones globales del carrito a través de varios niveles de props.
-
-Esta distribución mantiene responsabilidades separadas y evita dependencias innecesarias.
-
-## 12. Qué hice distinto y por qué
-
-Respecto de los ejemplos de clase, se tomaron las siguientes decisiones:
-
-**Personalización del catálogo:** se eligió una tienda de productos naturales y frutos secos para desarrollar una aplicación con una identidad propia que pueda ampliarse durante el módulo.
-
-**Separación de hooks:** cada Context tiene su custom hook con guard para centralizar el acceso y detectar usos incorrectos.
-
-**Integración entre dominios:** se implementó el vaciado del carrito al cerrar sesión para demostrar una interacción real entre autenticación y carrito.
-
-**Tests automatizados:** se incorporaron pruebas del guard y de la integración entre Providers para validar comportamientos concretos.
-
-**Alcance controlado:** se evitó agregar funcionalidades de producción, como pagos, persistencia, autenticación real o gestión avanzada de stock, porque todavía no forman parte de los objetivos de esta etapa.
-
-## 13. Instalación y ejecución
-
-Clonar el repositorio e instalar dependencias:
-
-```bash
-npm install
-```
-
-Iniciar el servidor de desarrollo:
-
-```bash
-npm run dev
-```
-
-Ejecutar los tests:
-
-```bash
-npm exec vitest run
-```
-
-Verificar la compilación:
-
-```bash
+```powershell
+npm run test:run
 npm run build
+# Runtime real, pruebas y build en secuencia:
+npm run check
 ```
 
-## 14. Próximos pasos
+La revisión de cierre ejecutó **76 pruebas en 7 archivos**, todas aprobadas, y compiló frontend y funciones TypeScript. Las pruebas utilizan mocks de Firebase y AWS; no sustituyen pruebas contra servicios reales ni acreditan un despliegue público. La integración continua ejecuta `npm run check` con Node 24. Ese comando también carga Firebase Admin sin mocks y verifica la conversión de una clave RSA, con `require(ESM)` deshabilitado para detectar incompatibilidades del runtime. Se fija `jose@5.10.0` únicamente dentro de `jwks-rsa`: la versión ESM 6 falló al arrancar la función en Vercel. Esta compatibilidad debe revisarse al actualizar Firebase Admin o el runtime.
 
-La arquitectura construida permite continuar incorporando funcionalidades al mismo proyecto en las siguientes clases del módulo.
+| Archivo de pruebas | Casos |
+| --- | ---: |
+| `cartReducer.test.ts` | 13 |
+| `useCart.test.tsx` | 4 |
+| `CartIntegration.test.tsx` | 4 |
+| `useAuth.test.tsx` | 15 |
+| `CheckoutFlow.test.tsx` | 5 |
+| `checkoutApi.test.ts` | 18 |
+| `createImageUpload.test.ts` | 17 |
 
-Entre las posibles ampliaciones se encuentran la búsqueda y filtrado de productos, las variantes por peso, la persistencia del carrito y la conexión con servicios externos, siempre de acuerdo con los requisitos de las próximas consignas.
+El mensaje esperado de `useCart` fuera de su provider corresponde a una prueba del guard, cuando aparece en la salida de React/jsdom. El resumen final de Vitest determina si el test pasó.
 
----
+## Entrega y verificación manual
 
+Durante el cierre, la autora realizó compras, consultó el detalle de pedidos y accedió con una cuenta administradora para completar una orden y gestionar productos. Se comprobó la creación de un producto con imagen, su actualización y eliminación. Las capturas compartidas de estos flujos corresponden a una Preview; la autora también informó haber actualizado Production y realizado las comprobaciones de compras y CRUD. El registro distingue estas evidencias de una auditoría independiente del dominio principal.
 
-### Modelado de datos
+Consultar el [registro de verificación](docs/VERIFICACION.md), la [guía de Vercel y mantenimiento](docs/DEPLOY.md) y la [presentación y guion de defensa](docs/DEFENSA.md).
 
-El blog está compuesto por tres entidades:
+La paginación actual funciona sobre el catálogo descargado completo; no implementa el extra de cursores `limit()` y `startAfter()` de Firestore. No hay cobros reales, gestión de entregas ni limpieza automática de imágenes huérfanas. El carrito vive en Context y se reinicia al recargar. No se implementaron los extras de analytics ni reviews.
 
-- **Author:** representa a la persona que escribe artículos.
-- **Post:** representa una publicación y contiene `authorId` como referencia a su autor.
-- **Comment:** representa un comentario asociado a un artículo mediante `postId`.
+## Bitácora de uso de IA
 
-Relaciones:
+ChatGPT acompañó la implementación y revisión; las decisiones se contrastaron con ejecuciones locales, capturas y resultados compartidos durante el trabajo. Las entradas siguientes resumen intercambios reales, no transcripciones literales.
 
-- Un autor puede escribir muchos posts.
-- Cada post pertenece a un autor.
-- Un post puede recibir muchos comentarios.
-- Cada comentario pertenece a un post.
+| Consulta o problema observado | Orientación y decisión aplicada | Comprobación o aprendizaje |
+| --- | --- | --- |
+| Los flyers debían definir la identidad y la tienda debía ser mobile first | Usar crema, verdes y amarillo maíz para marca y sol; reducir tarjetas y tamaños móviles | Se revisaron capturas de catálogo, administración y distintos anchos |
+| Algunas secciones conservaban estilos anteriores | Unificar superficies, controles y estados entre carrito, cuenta, detalle y administración | La autora comprobó las páginas y confirmó su funcionamiento |
+| El nombre de usuario quedaba separado en tablet | Ajustar la distribución responsive de la cabecera | La autora comparó laptop y tablet y confirmó el resultado |
+| Advertencias `min-w-[640px]` y `aspect-[4/3]` | Adoptar las formas canónicas de Tailwind cuando son equivalentes | Se distinguieron sugerencias del editor de errores de compilación |
+| Hacía falta comprobar carrito y compra | Añadir pruebas del reducer, hooks, integración, checkout y carga de imágenes | La autora compartió 75 pruebas aprobadas antes del cierre |
+| El build advertía un bundle grande | Cargar páginas por separado; ensayar agrupación de dependencias y retirar la separación que rompía Firebase | Un build exitoso no garantiza que el navegador arranque; se probó con preview |
+| La renovación del token podía parecer una salida de sesión | Conservar la identidad durante la comprobación del token de la misma cuenta | Una prueba nueva falló antes de corregirlo y pasó después; total: 76 |
+| Planificación de arquitectura | Distribuir responsabilidades entre contexts, reducer, servicios, páginas y funciones | Se mantuvo el carrito como referencias a productos y la autorización de escrituras en el servidor; ver estructura y arquitectura |
+| Revisión de código de sesión | Se detectó que borrar el usuario al renovar el token vaciaba el carrito | Se añadió una regresión que falló antes de la corrección y pasó después; `CartIntegration.test.tsx` |
+| Preparación para Vercel | Sacar el helper de `api`, declarar Firebase Admin en dependencias de servidor y comprobar TypeScript de las funciones | Se distinguió el build del frontend de la ejecución real de los endpoints |
+| Checkout caído con `ERR_REQUIRE_ESM` | Revisar la cadena Firebase Admin → jwks-rsa → jose y limitar el override de jose a esa dependencia | Se reprodujo el fallo con `require(ESM)` deshabilitado; `scripts/checkServerRuntime.mjs` comprueba carga y conversión RSA sin mocks |
+| Firebase Admin rechazaba la clave privada | Interpretar el código `config/invalid-private-key-format`, extraer `private_key` del JSON y copiarla sin imprimirla | Se aprendió a distinguir clave, nombre de variable, formato y entorno; después del redeploy se registró un pedido por $15.600 |
+| Google fallaba en nuevas Preview | Comparar el dominio abierto con los dominios autorizados de Firebase | Misma cuenta no implica mismo origen; usar dominio fijo para operación y una dirección estable para pruebas |
+| Carga a S3 bloqueada aunque respondía 204 | Revisar CORS y autorizar los orígenes HTTPS exactos, conservando POST y el bucket privado | Tras el cambio, la autora creó el producto con imagen y comprobó su edición y eliminación |
+| Deploys repetidos conservaban el error anterior | Comparar Source y commit, no solo la fecha o estado Ready | Redeploy reconstruye el mismo commit: se seleccionó `95cb2ba`, que contenía la corrección, y se verificó el checkout |
 
-### Decisión NoSQL: referencia del autor
-
-Se decidió almacenar `authorId` dentro de cada post, en lugar de duplicar el nombre y la foto del autor.
-
-**Justificación:** evita duplicación de datos y facilita mantener actualizada la información del autor. La desventaja es que, para mostrar sus datos completos, se necesita consultar también el documento correspondiente al autor.
-
-### Decisión NoSQL: almacenamiento de comentarios
-
-Se eligió modelar los comentarios como una subcolección de cada post:
-
-```text
-posts/{postId}/comments/{commentId}
-```
-
-Esta estructura permite consultar los comentarios de un artículo específico de manera directa y mantiene una organización clara.
-
-Como alternativa, se evaluó una colección independiente `comments`, donde cada comentario tendría un campo `postId`.
-
-Ambas opciones son escalables en Firestore. La colección independiente puede resultar conveniente para consultas y moderación global, mientras que las subcolecciones se ajustan mejor al acceso habitual de nuestro blog.
-
-**Decisión final:** utilizar subcolecciones, priorizando la organización por artículo y evitando complejidad innecesaria.
-
-### Bitácora de uso de IA
-
-**Prompt utilizado:**
-
-> En un blog de productos naturales desarrollado con React y TypeScript, ¿conviene guardar los comentarios como subcolección de cada post o como colección independiente en Firestore? Compará ventajas y desventajas de ambas alternativas, considerando consultas, escalabilidad y mantenimiento. Recomendá una opción sin agregar complejidad innecesaria.
-
-**Análisis recibido:**
-
-La IA comparó ambas alternativas considerando las consultas, la escalabilidad, la organización y el mantenimiento. También señaló que Firestore permite realizar consultas de grupo de colecciones y que eliminar un post no elimina automáticamente sus subcolecciones.
-
-| Sugerencia de IA | Decisión | Justificación |
-|---|---|---|
-| Utilizar subcolecciones por post | Acepto | Se adapta a la consulta habitual de comentarios por artículo. |
-| Considerar una colección independiente para moderación global | No implementar por ahora | El proyecto todavía no requiere un sistema de moderación centralizado. |
-| Contemplar la eliminación de subcolecciones al borrar posts | Acepto como consideración futura | Firestore no elimina automáticamente los documentos de las subcolecciones. |
-
-### Estado de implementación
-
-El archivo `src/services/blogService.ts` implementa:
-
-- `getPosts()`
-- `getPostsByAuthor(id)`
-- `addComment(postId, comment)`
-- `getCommentsByPost(postId)`, como función adicional.
-
-Actualmente se utilizan datos simulados almacenados en memoria. **La estructura de subcolecciones es una decisión de diseño para una futura implementación con Firestore; todavía no existe persistencia real.**
-
-## Documentación del uso de IA — UI Kit
-
-### Objetivo
-
-Durante el desarrollo del UI Kit se utilizó ChatGPT como herramienta de apoyo para diseñar, implementar y revisar componentes reutilizables en React y TypeScript.
-
-El objetivo fue construir componentes con responsabilidades claras, propiedades tipadas y comportamientos verificables desde una página Playground.
-
-### Consulta 1 — Diseño de componentes reutilizables
-
-**Resumen de la consulta realizada:**
-
-¿Cómo podemos implementar componentes Button y ProductCard reutilizables en React y TypeScript, diferenciando sus variantes mediante propiedades tipadas y evitando combinaciones inválidas?
-
-**Orientación obtenida:**
-
-Se propuso utilizar uniones discriminadas de TypeScript para distinguir las variantes de cada componente.
-
-En Button, la propiedad `variant` permite diferenciar botones de acción (`solid`) y enlaces (`link`).
-
-En ProductCard, la propiedad `layout` distingue las presentaciones `grid` y `list`.
-
-**Decisión aplicada:**
-
-Se implementaron componentes reutilizables que reciben sus datos y comportamientos mediante props.
-
-### Consulta 2 — Validación del UI Kit
-
-**Resumen de la consulta realizada:**
-
-¿Cómo podemos comprobar que los componentes del UI Kit funcionan correctamente sin depender todavía de Firebase, Firestore ni del carrito definitivo?
-
-**Orientación obtenida:**
-
-Se propuso crear una página Playground para probar los componentes de forma aislada, mediante datos de ejemplo, callbacks y controles de estado.
-
-**Decisión aplicada:**
-
-Se implementó una página Playground que permite comprobar:
-
-- Variantes y tamaños de Button.
-- Estado de carga y desactivación del botón.
-- Presentaciones grid y list de ProductCard.
-- Estados Loading, Empty, Error y Success.
-- Apertura y cierre de modales.
-- Ejecución de callbacks mediante mensajes de confirmación.
-
-### Tabla de decisiones técnicas
-
-| Decisión | Alternativas consideradas | Resultado |
-|---|---|---|
-| Tipado de variantes | Uniones discriminadas o props opcionales sin restricciones | Se eligieron uniones discriminadas para evitar combinaciones inválidas. |
-| Responsabilidad de ProductCard | Incorporar lógica del carrito dentro del componente o recibir un callback | Se eligió `onAddToCart` para mantener el componente independiente del contexto y los servicios. |
-| Validación de componentes | Conectar directamente todos los componentes con servicios reales o utilizar un Playground | Se descartó la dependencia inmediata de servicios reales y se eligió un Playground con datos de ejemplo. |
-
-### Verificación
-
-Se realizaron pruebas manuales en el navegador para comprobar el comportamiento de los componentes.
-
-Se verificó el cambio entre las presentaciones de ProductCard, el estado de carga de Button, la visualización de los distintos estados de interfaz y la apertura de los modales.
-
-Los botones ejecutan callbacks y muestran mensajes de confirmación. Estas pruebas permiten validar la interfaz antes de integrar los servicios definitivos del e-commerce.
-
-### Conclusión
-
-La IA se utilizó como apoyo para comprender las alternativas de diseño y revisar la implementación.
-
-Las decisiones se aplicaron en el proyecto y los componentes se probaron manualmente en el navegador.
-
-El UI Kit queda preparado para reutilizarse durante la integración del catálogo, el carrito y las funcionalidades administrativas.
+La documentación de las primeras homeworks, con sus decisiones y bitácora originales, se conserva en [Historial de homeworks](docs/HISTORIAL-HOMEWORKS.md). Describe etapas anteriores y no el estado actual del producto.
