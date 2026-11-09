@@ -7,4 +7,18 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "firebase",
+              test: /[\\/]node_modules[\\/](?:@firebase[\\/]|firebase[\\/])/,
+            },
+          ],
+        },
+      },
+    },
+  },
 });
