@@ -219,9 +219,30 @@ function OrderActions({
   );
 }
 
+const statusStyles: Record<OrderStatus, string> = {
+  pending:
+    "border-slate-300 bg-slate-100 text-slate-800 " +
+    "dark:border-slate-500 dark:bg-slate-800 dark:text-slate-100",
+  processing:
+    "border-amber-300 bg-amber-100 text-amber-900 " +
+    "dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200",
+  completed:
+    "border-green-300 bg-green-100 text-green-900 " +
+    "dark:border-green-600 dark:bg-green-950 dark:text-green-200",
+  cancelled:
+    "border-red-300 bg-red-100 text-red-900 " +
+    "dark:border-red-600 dark:bg-red-950 dark:text-red-200",
+};
+
 function StatusBadge({ status }: { status: OrderStatus }) {
   return (
-    <span className="inline-flex rounded-full border border-line bg-surface-soft px-2.5 py-1 text-xs font-semibold text-ink">
+    <span
+      className={[
+        "inline-flex items-center whitespace-nowrap rounded-full",
+        "border px-2.5 py-1 text-xs font-semibold",
+        statusStyles[status],
+      ].join(" ")}
+    >
       {statusLabels[status]}
     </span>
   );

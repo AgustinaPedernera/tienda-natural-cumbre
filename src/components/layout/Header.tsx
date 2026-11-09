@@ -152,7 +152,7 @@ export function Header() {
             </svg>
 
             <span className="min-w-0">
-              <span className="block truncate font-display text-xl font-bold leading-none text-[#E8BB55] sm:text-2xl">
+              <span className="block truncate font-display text-xl font-bold leading-none text-brand dark:text-[#E8BB55] sm:text-2xl">
                 Cumbre
               </span>
 
