@@ -1,15 +1,16 @@
-
 import {
   createContext,
   useEffect,
   useReducer,
-  useRef,
   type ReactNode,
 } from "react";
 
 import type { CartItem } from "../types/cart";
 import { useAuth } from "../hooks/useAuth";
-import { cartReducer } from "../reducers/cartReducer";
+import {
+  cartReducer,
+  type CartAction,
+} from "../reducers/cartReducer";
 
 interface CartContextType {
   items: CartItem[];
@@ -27,39 +28,212 @@ interface CartProviderProps {
   children: ReactNode;
 }
 
-export function CartProvider({ children }: CartProviderProps) {
-  const { user } = useAuth();
+interface PersistentCartState {
+  ownerId: string | null;
+  items: CartItem[];
+  ready: boolean;
+}
 
-  const [items, dispatch] = useReducer(cartReducer, []);
+type PersistentCartAction =
+  | CartAction
+  | {
+      type: "RESTORE_CART";
+      ownerId: string | null;
+      items: CartItem[];
+    };
 
-  const previousUserId = useRef(user?.id ?? null);
+const initialState: PersistentCartState = {
+  ownerId: null,
+  items: [],
+  ready: false,
+};
 
-  useEffect(() => {
-    const currentUserId = user?.id ?? null;
+function storageKey(ownerId: string | null) {
+  return ownerId === null
+    ? "cumbre-cart:v1:guest"
+    : `cumbre-cart:v1:user:${ownerId}`;
+}
 
-    if (
-      previousUserId.current !== null &&
-      previousUserId.current !== currentUserId
-    ) {
-      dispatch({ type: "CLEAR_CART" });
+function readStoredCart(ownerId: string | null): CartItem[] {
+  try {
+    const stored = localStorage.getItem(storageKey(ownerId));
+
+    if (!stored) return [];
+
+    const parsed: unknown = JSON.parse(stored);
+
+    if (!Array.isArray(parsed)) return [];
+
+    const ids = new Set<string>();
+    const validated: CartItem[] = [];
+
+    for (const entry of parsed) {
+      if (
+        typeof entry !== "object" ||
+        entry === null ||
+        !("productId" in entry) ||
+        typeof entry.productId !== "string" ||
+        entry.productId.trim() === "" ||
+        entry.productId.includes("/") ||
+        !("quantity" in entry) ||
+        typeof entry.quantity !== "number" ||
+        !Number.isSafeInteger(entry.quantity) ||
+        entry.quantity <= 0 ||
+        ids.has(entry.productId)
+      ) {
+        return [];
+      }
+
+      ids.add(entry.productId);
+
+      validated.push({
+        productId: entry.productId,
+        quantity: entry.quantity,
+      });
     }
 
-    previousUserId.current = currentUserId;
-  }, [user?.id]);
+    return validated;
+  } catch {
+    // Un almacenamiento bloqueado o inválido no impide comprar.
+    return [];
+  }
+}
+
+function removeStoredCart(ownerId: string | null) {
+  try {
+    localStorage.removeItem(storageKey(ownerId));
+  } catch {
+    // El carrito continúa funcionando en memoria.
+  }
+}
+
+function persistentCartReducer(
+  state: PersistentCartState,
+  action: PersistentCartAction
+): PersistentCartState {
+  if (action.type === "RESTORE_CART") {
+    return {
+      ownerId: action.ownerId,
+      items: action.items,
+      ready: true,
+    };
+  }
+
+  return {
+    ...state,
+    items: cartReducer(state.items, action),
+  };
+}
+
+export function CartProvider({ children }: CartProviderProps) {
+  const { user, loading } = useAuth();
+  const currentUserId = user?.id ?? null;
+
+  const [state, dispatch] = useReducer(
+    persistentCartReducer,
+    initialState
+  );
+
+  useEffect(() => {
+    // Firebase debe resolver la sesión antes de elegir el carrito.
+    if (loading) return;
+
+    if (state.ready && state.ownerId === currentUserId) {
+      return;
+    }
+
+    const signingInFromGuest =
+      state.ready &&
+      state.ownerId === null &&
+      currentUserId !== null;
+
+    // Al salir o cambiar de cuenta, quitamos la copia anterior.
+    if (
+      state.ready &&
+      state.ownerId !== null &&
+      state.ownerId !== currentUserId
+    ) {
+      removeStoredCart(state.ownerId);
+    }
+
+    const restoredItems =
+      signingInFromGuest && state.items.length > 0
+        ? state.items
+        : readStoredCart(currentUserId);
+
+    if (signingInFromGuest) {
+      removeStoredCart(null);
+    }
+
+    dispatch({
+      type: "RESTORE_CART",
+      ownerId: currentUserId,
+      items: restoredItems,
+    });
+  }, [
+    loading,
+    currentUserId,
+    state.ready,
+    state.ownerId,
+    state.items,
+  ]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      !state.ready ||
+      state.ownerId !== currentUserId
+    ) {
+      return;
+    }
+
+    try {
+      const key = storageKey(state.ownerId);
+
+      if (state.items.length === 0) {
+        localStorage.removeItem(key);
+      } else {
+        localStorage.setItem(
+          key,
+          JSON.stringify(state.items)
+        );
+      }
+    } catch {
+      // Si no puede persistirse, el estado en memoria sigue disponible.
+    }
+  }, [
+    loading,
+    currentUserId,
+    state.ready,
+    state.ownerId,
+    state.items,
+  ]);
+
+  // Durante un cambio de identidad no mostramos el carrito anterior.
+  const belongsToCurrentSession =
+    state.ready && state.ownerId === currentUserId;
+
+  const items = belongsToCurrentSession ? state.items : [];
+
+  const dispatchCartAction = (action: CartAction) => {
+    if (loading || !belongsToCurrentSession) return;
+
+    dispatch(action);
+  };
 
   const addToCart = (productId: string) => {
-    dispatch({ type: "ADD_ITEM", productId });
+    dispatchCartAction({ type: "ADD_ITEM", productId });
   };
 
   const removeFromCart = (productId: string) => {
-    dispatch({ type: "REMOVE_ITEM", productId });
+    dispatchCartAction({ type: "REMOVE_ITEM", productId });
   };
 
   const updateQuantity = (
     productId: string,
     quantity: number
   ) => {
-    dispatch({
+    dispatchCartAction({
       type: "UPDATE_QUANTITY",
       productId,
       quantity,
@@ -67,7 +241,7 @@ export function CartProvider({ children }: CartProviderProps) {
   };
 
   const clearCart = () => {
-    dispatch({ type: "CLEAR_CART" });
+    dispatchCartAction({ type: "CLEAR_CART" });
   };
 
   return (
