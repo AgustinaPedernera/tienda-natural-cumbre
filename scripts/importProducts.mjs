@@ -1,28 +1,33 @@
-
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
 const PROJECT_ID = "tienda-natural-cumbre";
-
 const CATALOG_PATH = resolve("catalogo_cumbre_60_productos.json");
-const KEY_PATH = resolve("firebase-service-account.json");
 
 async function main() {
   const products = JSON.parse(
     await readFile(CATALOG_PATH, "utf8")
   );
 
-  const credentials = JSON.parse(
-    await readFile(KEY_PATH, "utf8")
-  );
+  const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY
+    ?.trim()
+    .replace(/\\n/g, "\n");
+
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error(
+      "Faltan variables de Firebase Admin. Cargá .env.local con --env-file."
+    );
+  }
 
   if (!Array.isArray(products)) {
     throw new Error("El catálogo debe ser un array de productos.");
   }
 
-  if (credentials.project_id !== PROJECT_ID) {
+  if (projectId !== PROJECT_ID) {
     throw new Error(
       "La clave privada no corresponde al proyecto Firebase."
     );
@@ -57,7 +62,11 @@ async function main() {
   }
 
   initializeApp({
-    credential: cert(credentials),
+    credential: cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    }),
     projectId: PROJECT_ID,
   });
 
@@ -69,7 +78,6 @@ async function main() {
   );
 
   const existingDocuments = await db.getAll(...references);
-
   const batch = db.batch();
 
   let created = 0;

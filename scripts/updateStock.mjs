@@ -1,19 +1,30 @@
-
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
-const credentials = JSON.parse(
-  await readFile(resolve("firebase-service-account.json"), "utf8")
-);
+const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+const privateKey = process.env.FIREBASE_PRIVATE_KEY
+  ?.trim()
+  .replace(/\\n/g, "\n");
 
-if (credentials.project_id !== "tienda-natural-cumbre") {
-  throw new Error("La clave privada no corresponde a Tienda Natural Cumbre.");
+if (!projectId || !clientEmail || !privateKey) {
+  throw new Error(
+    "Faltan variables de Firebase Admin. Cargá .env.local con --env-file."
+  );
+}
+
+if (projectId !== "tienda-natural-cumbre") {
+  throw new Error(
+    "La clave privada no corresponde a Tienda Natural Cumbre."
+  );
 }
 
 initializeApp({
-  credential: cert(credentials),
+  credential: cert({
+    projectId,
+    clientEmail,
+    privateKey,
+  }),
   projectId: "tienda-natural-cumbre",
 });
 
